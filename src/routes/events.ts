@@ -23,6 +23,24 @@ app.get("/", async c => {
 })
 
 
+// GET MY EVENTS
+app.get("/me", requireAuth, async c => {
+    const user = c.get("user")
+
+    const [events] = await db
+        .select()
+        .from(eventTable)
+        .where(eq(eventTable.creator_id, user.id))
+    
+    return c.json({
+        success: true,
+        data: {
+            events
+        }
+    })
+})
+
+
 // GET SINGLE BY ID
 app.get("/:id", async c => {
     const id = c.req.param("id")
@@ -43,6 +61,8 @@ app.get("/:id", async c => {
     }, 200)
 })
 
+
+// CREATE EVENT
 app.post("/", requireAuth, async c => {
     const body = await c.req.json()
     const user = c.get("user")
@@ -58,13 +78,13 @@ app.post("/", requireAuth, async c => {
         })
         .returning()
 
-        return c.json({
-            success: true,
-            status: 201,
-            data: {
-                event: newEvent
-            }
-        }, 201)
+    return c.json({
+        success: true,
+        status: 201,
+        data: {
+            event: newEvent
+        }
+    }, 201)
 })
 
 export default app

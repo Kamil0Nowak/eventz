@@ -87,4 +87,66 @@ app.post("/", requireAuth, async c => {
     }, 201)
 })
 
+
+// UPDATE
+app.patch("/:id", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    const user = c.get("user");
+
+    const [existingEvent] = await db
+        .select()
+        .from(eventTable)
+        .where(eq(eventTable.id, id));
+
+    if (!existingEvent) {
+        throw new HTTPException(404, { message: "Event not found" });
+    }
+
+    if (existingEvent.creator_id !== user.id) {
+        throw new HTTPException(403, { message: "Forbidden" });
+    }
+
+    const [updatedEvent] = await db
+        .update(eventTable)
+        .set({
+            name: body.name ?? existingEvent.name,
+            description: body.description ?? existingEvent.description,
+            starts_at: body.starts_at ? new Date(body.starts_at) : existingEvent.starts_at,
+        })
+        .where(eq(eventTable.id, id))
+        .returning();
+
+    return c.json({
+        success: true,
+        data: { event: updatedEvent }
+    });
+});
+
+
+//DELETE
+app.delete("/:id", requireAuth, async (c) => {
+    const id = c.req.param("id");
+    const user = c.get("user");
+
+    const [existingEvent] = await db
+        .select()
+        .from(eventTable)
+        .where(eq(eventTable.id, id));
+
+    if (!existingEvent) {
+        throw new HTTPException(404, { message: "Event not found" });
+    }
+
+    if (existingEvent.creator_id !== user.id) {
+        throw new HTTPException(403, { message: "Forbidden" });
+    }
+
+    await db
+        .delete(eventTable)
+        .where(eq(eventTable.id, id));
+
+    return c.body(null, 204);
+});
+
 export default app

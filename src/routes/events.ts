@@ -3,6 +3,8 @@ import { db } from "../database";
 import { eventTable } from "../database/schema"
 import { eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
+import { auth } from "../lib/auth";
+import { requireAuth } from "../middleware/auth";
 
 const app = new Hono()
 
@@ -41,14 +43,15 @@ app.get("/:id", async c => {
     }, 200)
 })
 
-app.post("/", async c => {
+app.post("/", requireAuth, async c => {
     const body = await c.req.json()
+    const user = c.get("user")
 
     const [newEvent] = await db
         .insert(eventTable)
         .values({
             name: body.name,
-            creator_id: "BV6NWK3IDerrGYPvrTROqMwrgC9B0ehX",
+            creator_id: user.id,
             description: body.description,
             starts_at: new Date(),
             capacity: 10

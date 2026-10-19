@@ -41,4 +41,27 @@ app.get("/:id", async c => {
     }, 200)
 })
 
+app.post("/", async c => {
+    const body = await c.req.json()
+
+    const [newEvent] = await db
+        .insert(eventTable)
+        .values({
+            name: body.name,
+            creator_id: "BV6NWK3IDerrGYPvrTROqMwrgC9B0ehX",
+            description: body.description,
+            starts_at: new Date(),
+            capacity: 10
+        })
+        .returning()
+
+        return c.json({
+            success: true,
+            status: 201,
+            data: {
+                event: newEvent
+            }
+        }, 201)
+})
+
 export default app

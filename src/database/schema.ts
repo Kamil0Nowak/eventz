@@ -16,13 +16,13 @@ export const user = sqliteTable("user", {
 });
 
 export const eventTable = sqliteTable("event", {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     name: text("name").notNull(),
     description: text("description").notNull(),
     starts_at: integer("starts_at", { mode: "timestamp_ms" }).notNull(),
     capacity: integer("capacity").default(0),    
     creator_id: text("creator_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" })
       .$onUpdate(() => new Date())
       .notNull(),

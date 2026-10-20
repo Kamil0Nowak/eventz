@@ -1,41 +1,89 @@
 import { Hono } from "hono";
 import { db } from "../database";
 import { eventTable } from "../database/schema"
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { auth } from "../lib/auth";
 import { requireAuth } from "../middleware/auth";
+import z from "zod";
+import { sValidator } from "@hono/standard-validator";
+
+const createEventSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().min(1),
+  starts_at: z.string().datetime(),
+  capacity: z.number().int().positive(),
+});
+
+
+const updateEventSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+  starts_at: z.string().datetime().optional(),
+  capacity: z.number().int().positive().optional(),
+});
+
+const paginationSchema = z.object({
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().optional(),
+});
 
 const app = new Hono()
 
 // GET ALL
-app.get("/", async c => {
-    const [events] = await db
+app.get("/", sValidator("query", paginationSchema), async c => {
+    const { page = 1, limit = 10 } = c.req.valid("query");
+
+    const [resultAll] = await db
+        .select({ count: count() })
+        .from(eventTable);
+
+    const totalEvents = resultAll.count;
+
+    const events = await db
         .select()
         .from(eventTable)
-    
+        .offset((page - 1) * limit)
+        .limit(limit);
+
     return c.json({
         success: true,
         data: {
             events
+        },
+        meta: {
+            pages: Math.ceil(totalEvents / limit),
+            total: totalEvents
         }
     })
 })
 
 
 // GET MY EVENTS
-app.get("/me", requireAuth, async c => {
+app.get("/me", requireAuth, sValidator("query", paginationSchema), async c => {
     const user = c.get("user")
+    const { page = 1, limit = 10 } = c.req.valid("query");
 
-    const [events] = await db
+    const [resultAll] = await db
+        .select({ count: count() })
+        .from(eventTable);
+
+    const totalEvents = resultAll.count;
+
+    const events = await db
         .select()
         .from(eventTable)
         .where(eq(eventTable.creator_id, user.id))
-    
+        .offset((page - 1) * limit)
+        .limit(limit);
+
     return c.json({
         success: true,
         data: {
             events
+        },
+        meta: {
+            pages: Math.ceil(totalEvents / limit),
+            total: totalEvents
         }
     })
 })
@@ -63,8 +111,8 @@ app.get("/:id", async c => {
 
 
 // CREATE EVENT
-app.post("/", requireAuth, async c => {
-    const body = await c.req.json()
+app.post("/", requireAuth, sValidator("json", createEventSchema), async c => {
+    const body = c.req.valid("json");
     const user = c.get("user")
 
     const [newEvent] = await db
@@ -73,8 +121,8 @@ app.post("/", requireAuth, async c => {
             name: body.name,
             creator_id: user.id,
             description: body.description,
-            starts_at: new Date(),
-            capacity: 10
+            starts_at: new Date(body.starts_at),
+            capacity: body.capacity
         })
         .returning()
 
@@ -89,9 +137,9 @@ app.post("/", requireAuth, async c => {
 
 
 // UPDATE
-app.patch("/:id", requireAuth, async (c) => {
+app.patch("/:id", requireAuth, sValidator("json", updateEventSchema), async (c) => {
     const id = c.req.param("id");
-    const body = await c.req.json();
+    const body = c.req.valid("json");
     const user = c.get("user");
 
     const [existingEvent] = await db
@@ -113,6 +161,7 @@ app.patch("/:id", requireAuth, async (c) => {
             name: body.name ?? existingEvent.name,
             description: body.description ?? existingEvent.description,
             starts_at: body.starts_at ? new Date(body.starts_at) : existingEvent.starts_at,
+            capacity: body.capacity ?? existingEvent.capacity,
         })
         .where(eq(eventTable.id, id))
         .returning();

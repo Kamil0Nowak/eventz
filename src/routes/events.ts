@@ -8,8 +8,8 @@ import z from "zod";
 import { sValidator } from "@hono/standard-validator";
 
 const createEventSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1),
+  name: z.string().min(3).max(200),
+  description: z.string().min(3),
   starts_at: z.string().datetime(),
   capacity: z.number().int().positive(),
 });
@@ -26,6 +26,7 @@ const paginationSchema = z.object({
   page: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().positive().optional(),
 });
+
 
 const app = new Hono()
 
@@ -51,8 +52,8 @@ app.get("/", sValidator("query", paginationSchema), async c => {
             events
         },
         meta: {
-            pages: Math.ceil(totalEvents / limit),
-            total: totalEvents
+            pages_total: Math.ceil(totalEvents / limit),
+            total_items: totalEvents
         }
     })
 })
@@ -82,8 +83,8 @@ app.get("/me", requireAuth, sValidator("query", paginationSchema), async c => {
             events
         },
         meta: {
-            pages: Math.ceil(totalEvents / limit),
-            total: totalEvents
+            pages_total: Math.ceil(totalEvents / limit),
+            total_items: totalEvents
         }
     })
 })
@@ -111,10 +112,18 @@ app.get("/:id", async c => {
 
 
 // CREATE EVENT
-app.post("/", requireAuth, sValidator("json", createEventSchema), async c => {
+app.post("/", requireAuth, sValidator("json", createEventSchema, (result, c) => {
+    if (!result.success) {
+      return c.json({
+        success: false,
+        message: "Błąd walidacji parametrów",
+        errors: result.error.map((err) => ({ field: err.path![0], message: err.message  }) ),
+      }, 400);
+    }
+}), async c => {
     const body = c.req.valid("json");
     const user = c.get("user")
-
+    
     const [newEvent] = await db
         .insert(eventTable)
         .values({
@@ -137,7 +146,15 @@ app.post("/", requireAuth, sValidator("json", createEventSchema), async c => {
 
 
 // UPDATE
-app.patch("/:id", requireAuth, sValidator("json", updateEventSchema), async (c) => {
+app.patch("/:id", requireAuth, sValidator("json", updateEventSchema, (result, c) => {
+    if (!result.success) {
+      return c.json({
+        success: false,
+        message: "Błąd walidacji parametrów",
+        errors: result.error.map((err) => ({ field: err.path![0], message: err.message  }) ),
+      }, 400);
+    }
+}), async (c) => {
     const id = c.req.param("id");
     const body = c.req.valid("json");
     const user = c.get("user");
